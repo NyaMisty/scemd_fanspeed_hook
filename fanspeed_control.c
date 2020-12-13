@@ -10,8 +10,12 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <pthread.h>
+
 static const uint8_t port = 0x2e;
 static uint16_t ecbar = 0x00;
+static uint fanpwm = 0;
+static pthread_t worker_tid;
 
 void iowrite(uint8_t reg, uint8_t val) {
   outb(reg, port);
@@ -33,11 +37,23 @@ uint8_t ecread(uint8_t reg) {
   return inb(ecbar + 6);
 }
 
+void *fan_speed_worker() {
+    while (1) {
+        //syslog(3, "setting fanpwm to %d", fanpwm);
+        ecwrite(0x63, fanpwm);
+        ecwrite(0x6b, fanpwm);
+        ecwrite(0x73, fanpwm);
+        sleep(1);
+    }
+    return NULL;
+}
 
 void change_fanspeed(int pwm) {
-    ecwrite(0x63, pwm);
-    ecwrite(0x6b, pwm);
-    ecwrite(0x73, pwm);
+    if (worker_tid == 0) {
+        int err = pthread_create(&worker_tid, NULL, fan_speed_worker, NULL);
+        syslog(3, "Create worker got: %d\n", err);
+    }
+    fanpwm = pwm;
 }
 
 void init_fanspeed_control() {
@@ -77,6 +93,6 @@ void init_fanspeed_control() {
     ecwrite(0x17, 0x00);
     
     // Initialize the PWM value
-    uint8_t pwm = 0;
-    change_fanspeed(pwm);
+    //uint8_t pwm = 40;
+    //change_fanspeed(pwm);
 }
